@@ -37,8 +37,9 @@ except ImportError:
 # CONFIG
 # ==============================
 
-DATA_PATH = "/Users/yomnadean/Desktop/Research/septic_wrist_v2/RK_AI.xlsx"
-FINAL_FEATURES_PATH = "final_features.csv"  # from your previous script
+# Use the main dataset that actually contains your 200+ patients
+DATA_PATH = "RK_AI.xlsx"          # <-- changed from "RK_AI copy.xlsx"
+FINAL_FEATURES_PATH = "final_features.csv"  # from your previous feature-selection script
 TARGET = "septic"
 
 CV_SPLITS = 5
@@ -51,7 +52,11 @@ RANDOM_STATE = 42
 
 print("\nLoading data and feature list...")
 
+if not Path(DATA_PATH).exists():
+    raise FileNotFoundError(f"Data file '{DATA_PATH}' not found in current folder.")
+
 df = pd.read_excel(DATA_PATH)
+print(f"Data shape: {df.shape} (rows, columns)")
 
 if TARGET not in df.columns:
     raise ValueError(f"Outcome column '{TARGET}' not found in data!")
@@ -63,6 +68,14 @@ df = df[~df[TARGET].isna()].copy()
 df[TARGET] = df[TARGET].astype(int)
 n_after = len(df)
 print(f"Dropped {n_before - n_after} rows with missing septic outcome.")
+print(f"Remaining rows after septic cleaning: {len(df)}")
+
+if len(df) == 0:
+    raise ValueError(
+        "No rows left after cleaning septic outcome. "
+        "Please check that the Excel file has data on the first sheet and that "
+        "the 'septic' column is correctly populated."
+    )
 
 # 2) Load final features (locks feature set used for comparison)
 if not Path(FINAL_FEATURES_PATH).exists():
@@ -79,7 +92,7 @@ missing_feats = [f for f in features if f not in df.columns]
 if missing_feats:
     raise ValueError(f"The following features are missing from the data: {missing_feats}")
 
-# 3) Complete-case restriction for predictors
+# 3) Complete-case restriction for predictors (no imputation, per your preference)
 X_full = df[features].copy()
 y_full = df[TARGET].copy()
 
@@ -88,6 +101,18 @@ X = X_full[complete_mask].copy()
 y = y_full[complete_mask].copy()
 
 print(f"\nRows with complete data for all model features: {len(X)} / {len(df)}")
+
+if len(X) == 0:
+    # Helpful debugging output:
+    print("\nNo complete-case rows. Missingness by feature:")
+    print(X_full.isna().sum())
+    raise ValueError(
+        "There are no rows with complete data for all model features. "
+        "You can either:\n"
+        " 1) Allow imputation in the pipeline, or\n"
+        " 2) Revisit which features must be present for every patient.\n"
+        "For now, the script stops to avoid training on an empty dataset."
+    )
 
 # Outcome imbalance info
 n_pos = int(y.sum())
@@ -267,9 +292,31 @@ print(f"\nBest model by mean ROC AUC: {best_model_name}")
 
 best_model = models[best_model_name]
 
-# Fit best model on all complete-case data
+# Fit best model on all complete-case data and save
 best_model.fit(X, y)
 joblib.dump(best_model, "septic_wrist_best_model.joblib")
+print("\n✅ Saved best overall model pipeline as 'septic_wrist_best_model.joblib'")
 
-print("\n✅ Saved best model pipeline as 'septic_wrist_best_model.joblib'")
-print("   (Features used:", features, ")")
+# ==============================
+# SAVE EACH MODEL PIPELINE EXPLICITLY
+# ==============================
+
+model_save_paths = {
+    "logistic_l1": "septic_wrist_logistic.joblib",
+    "random_forest": "septic_wrist_rf.joblib",
+    "extra_trees": "septic_wrist_extratrees.joblib",
+    "xgboost": "septic_wrist_xgboost.joblib",
+    "lightgbm": "septic_wrist_lightgbm.joblib",
+}
+
+print("\nFitting and saving individual model pipelines on full data...")
+
+for model_name, model in models.items():
+    if model_name in model_save_paths:
+        save_path = model_save_paths[model_name]
+        print(f" - {model_name} -> {save_path}")
+        model.fit(X, y)  # train on all complete-case data
+        joblib.dump(model, save_path)
+
+print("\n✅ Finished training and saving all available models.")
+print("   Features used:", features)
