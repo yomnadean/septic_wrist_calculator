@@ -1,0 +1,20 @@
+# Don’t track raw data
+*.xlsx
+*.csv 
+!final_features.csv
+*.doc
+*.docx
+
+# R project junk
+.RData
+.Rhistory
+.Rproj*
+.Rproj.user/
+
+# macOS junk
+.DS_Store
+
+# model outputs
+model_comparison.csv
+screened_features.csv
+septic_wrist_with_predictions.xlsx
