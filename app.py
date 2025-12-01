@@ -408,8 +408,7 @@ if st.button("Calculate Septic Wrist Risk"):
 
         st.markdown(
             f"**Risk category:** {color} **{risk_cat}**  "
-            "(cutoffs are illustrative and should be refined using external validation and "
-            "decision-curve analysis)."
+           
         )
 
         with st.expander("Show input summary"):
